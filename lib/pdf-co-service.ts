@@ -2,24 +2,18 @@ import type { ExtractedCVData } from "./actions"
 
 export async function extractCVDataWithPdfCo(fileUrl: string, apiKey: string): Promise<ExtractedCVData> {
   console.log("Starting CV extraction with PDF.co")
-  console.log("File URL:", fileUrl)
-  console.log("API Key (first 5 chars):", apiKey.substring(0, 5) + "...")
 
   try {
-    // Step 1: Extract text from PDF using PDF.co Text Extraction API
-    console.log("Extracting text from PDF...")
+    // Attempt PDF.co extraction
     const extractedText = await extractTextFromPdf(fileUrl, apiKey)
-    console.log("Text extracted successfully. Length:", extractedText.length)
-
-    // Step 2: Process the extracted text to identify CV sections
-    console.log("Processing extracted text...")
-    const result = processExtractedText(extractedText)
-    console.log("Text processing complete. Sections found:", Object.keys(result))
-
-    return result
+    return processExtractedText(extractedText)
   } catch (error) {
-    console.error("Error in extractCVDataWithPdfCo:", error)
-    throw error
+    console.error("Error with PDF.co extraction, falling back to simple text extraction:", error)
+
+    // Fallback to simple text extraction
+    const response = await fetch(fileUrl)
+    const text = await response.text()
+    return processExtractedText(text)
   }
 }
 
@@ -75,9 +69,10 @@ async function extractTextFromPdf(fileUrl: string, apiKey: string): Promise<stri
 }
 
 function processExtractedText(text: string): ExtractedCVData {
-  // Implement your text processing logic here
-  // This is a simple example, you should enhance this based on your needs
-  const lines = text.split("\n")
+  const lines = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
   const result: ExtractedCVData = {
     education: [],
     qualifications: [],
@@ -87,19 +82,73 @@ function processExtractedText(text: string): ExtractedCVData {
   }
 
   let currentSection = ""
+  const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/
+  const phoneRegex = /\b(\+\d{1,2}\s?)?\d{3}[\s.-]?\d{3}[\s.-]?\d{4}\b/
+  const urlRegex = /https?:\/\/(www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_+.~#?&//=]*)/
+
   for (const line of lines) {
-    if (line.toLowerCase().includes("education")) {
+    const lowerLine = line.toLowerCase()
+
+    // Check for section headers
+    if (lowerLine.includes("education") || lowerLine.includes("academic")) {
       currentSection = "education"
-    } else if (line.toLowerCase().includes("skills") || line.toLowerCase().includes("qualifications")) {
+      continue
+    } else if (
+      lowerLine.includes("skills") ||
+      lowerLine.includes("qualifications") ||
+      lowerLine.includes("expertise")
+    ) {
       currentSection = "qualifications"
-    } else if (line.toLowerCase().includes("projects") || line.toLowerCase().includes("experience")) {
+      continue
+    } else if (
+      lowerLine.includes("projects") ||
+      lowerLine.includes("experience") ||
+      lowerLine.includes("work history")
+    ) {
       currentSection = "projects"
-    } else if (currentSection === "education") {
-      result.education.push(line)
-    } else if (currentSection === "qualifications") {
-      result.qualifications.push(line)
-    } else if (currentSection === "projects") {
-      result.projects.push(line)
+      continue
+    } else if (lowerLine.includes("personal information") || lowerLine.includes("contact")) {
+      currentSection = "personalInfo"
+      continue
+    }
+
+    // Extract personal information
+    const emailMatch = line.match(emailRegex)
+    if (emailMatch && !result.personalInfo.email) {
+      result.personalInfo.email = emailMatch[0]
+    }
+
+    const phoneMatch = line.match(phoneRegex)
+    if (phoneMatch && !result.personalInfo.phone) {
+      result.personalInfo.phone = phoneMatch[0]
+    }
+
+    const urlMatch = line.match(urlRegex)
+    if (urlMatch) {
+      if (urlMatch[0].toLowerCase().includes("linkedin.com")) {
+        result.personalInfo.linkedin = urlMatch[0]
+      } else {
+        result.personalInfo.otherLinks = result.personalInfo.otherLinks || []
+        result.personalInfo.otherLinks.push(urlMatch[0])
+      }
+    }
+
+    // Attempt to extract name (this is a simple heuristic and might need improvement)
+    if (!result.personalInfo.name && line.split(" ").length >= 2 && !emailMatch && !phoneMatch && !urlMatch) {
+      result.personalInfo.name = line
+    }
+
+    // Add content to the appropriate section
+    switch (currentSection) {
+      case "education":
+        result.education.push(line)
+        break
+      case "qualifications":
+        result.qualifications.push(line)
+        break
+      case "projects":
+        result.projects.push(line)
+        break
     }
   }
 

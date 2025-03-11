@@ -1,3 +1,4 @@
+// Update the API route to handle the new personal info fields
 import { type NextRequest, NextResponse } from "next/server"
 import { uploadFileToGCS } from "@/lib/storage-service"
 import { extractCVDataWithPdfCo } from "@/lib/pdf-co-service"
@@ -40,13 +41,11 @@ export async function POST(request: NextRequest) {
     const email = formData.get("email") as string
     const phone = formData.get("phone") as string
 
-    if (name || email || phone) {
-      extractedData.personalInfo = {
-        ...extractedData.personalInfo,
-        name: name || extractedData.personalInfo.name,
-        email: email || extractedData.personalInfo.email,
-        phone: phone || extractedData.personalInfo.phone,
-      }
+    extractedData.personalInfo = {
+      ...extractedData.personalInfo,
+      name: extractedData.personalInfo.name || name,
+      email: extractedData.personalInfo.email || email,
+      phone: extractedData.personalInfo.phone || phone,
     }
 
     console.log("Extracted data:", extractedData)
