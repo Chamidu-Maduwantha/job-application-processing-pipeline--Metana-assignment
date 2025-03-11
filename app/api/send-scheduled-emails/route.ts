@@ -2,16 +2,18 @@ import { type NextRequest, NextResponse } from "next/server"
 import { sendFollowUpEmail } from "@/lib/email-service"
 import { getFirestore } from "firebase-admin/firestore"
 
-
-const db = getFirestore()
-
 export async function GET(request: NextRequest) {
   try {
-    
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader || authHeader !== `Bearer ${process.env.CRON_SECRET_KEY}`) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     console.log("Processing scheduled emails...")
 
     const now = new Date()
 
+    const db = getFirestore()
     const emailsSnapshot = await db
       .collection("scheduledEmails")
       .where("scheduledFor", "<=", now.toISOString())
@@ -35,6 +37,11 @@ export async function GET(request: NextRequest) {
           name: emailData.name,
           cvUrl: emailData.cvUrl,
           applicationId: emailData.applicationId,
+        })
+
+        await doc.ref.update({
+          sent: true,
+          sentAt: new Date().toISOString(),
         })
 
         results.push({
