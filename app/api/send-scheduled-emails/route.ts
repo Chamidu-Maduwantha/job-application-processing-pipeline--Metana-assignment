@@ -1,9 +1,20 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { sendFollowUpEmail } from "@/lib/email-service"
 import { getFirestore } from "firebase-admin/firestore"
+import { initializeApp, getApps, cert } from "firebase-admin/app"
+
+// Initialize Firebase Admin if it hasn't been initialized yet
+if (!getApps().length) {
+  initializeApp({
+    credential: cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY || "{}")),
+  })
+}
+
+const db = getFirestore()
 
 export async function GET(request: NextRequest) {
   try {
+    // Check for a secret key to secure the endpoint
     const authHeader = request.headers.get("authorization")
     if (!authHeader || authHeader !== `Bearer ${process.env.CRON_SECRET_KEY}`) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -11,9 +22,10 @@ export async function GET(request: NextRequest) {
 
     console.log("Processing scheduled emails...")
 
+    // Get current time
     const now = new Date()
 
-    const db = getFirestore()
+    // Get all emails scheduled to be sent before now
     const emailsSnapshot = await db
       .collection("scheduledEmails")
       .where("scheduledFor", "<=", now.toISOString())
@@ -26,22 +38,19 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ message: "No emails to send" })
     }
 
+    // Process each email
     const results = []
     for (const doc of emailsSnapshot.docs) {
       const emailData = doc.data()
       console.log(`Sending email to ${emailData.to}...`)
 
       try {
+        // Send the email
         await sendFollowUpEmail({
           to: emailData.to,
           name: emailData.name,
           cvUrl: emailData.cvUrl,
           applicationId: emailData.applicationId,
-        })
-
-        await doc.ref.update({
-          sent: true,
-          sentAt: new Date().toISOString(),
         })
 
         results.push({

@@ -1,62 +1,84 @@
 import type { ExtractedCVData } from "./actions"
 
 export async function extractCVDataWithPdfCo(fileUrl: string, apiKey: string): Promise<ExtractedCVData> {
+  console.log("Starting CV extraction with PDF.co")
+  console.log("File URL:", fileUrl)
+  console.log("API Key (first 5 chars):", apiKey.substring(0, 5) + "...")
+
   try {
-    console.log("Extracting CV data with PDF.co from URL:", fileUrl)
-
+    // Step 1: Extract text from PDF using PDF.co Text Extraction API
+    console.log("Extracting text from PDF...")
     const extractedText = await extractTextFromPdf(fileUrl, apiKey)
+    console.log("Text extracted successfully. Length:", extractedText.length)
 
-    return processExtractedText(extractedText)
+    // Step 2: Process the extracted text to identify CV sections
+    console.log("Processing extracted text...")
+    const result = processExtractedText(extractedText)
+    console.log("Text processing complete. Sections found:", Object.keys(result))
+
+    return result
   } catch (error) {
-    console.error("Error extracting CV data with PDF.co:", error)
-    return createEmptyExtractedData()
+    console.error("Error in extractCVDataWithPdfCo:", error)
+    throw error
   }
 }
 
-
 async function extractTextFromPdf(fileUrl: string, apiKey: string): Promise<string> {
-  // PDF.co API 
+  console.log("Making request to PDF.co API")
   const endpoint = "https://api.pdf.co/v1/pdf/convert/to/text"
-
   const parameters = {
     url: fileUrl,
     inline: false,
     async: false,
   }
 
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "x-api-key": apiKey,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(parameters),
-  })
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(parameters),
+    })
 
-  if (!response.ok) {
-    const errorData = await response.json()
-    throw new Error(`PDF.co API error: ${errorData.message || response.statusText}`)
-  }
+    console.log("PDF.co API response status:", response.status)
 
-  const data = await response.json()
-
-  if (data.error === false) {
-    const resultFileUrl = data.url
-
-    const textResponse = await fetch(resultFileUrl)
-    if (!textResponse.ok) {
-      throw new Error(`Failed to download result: ${textResponse.statusText}`)
+    if (!response.ok) {
+      const errorData = await response.json()
+      console.error("PDF.co API error:", errorData)
+      throw new Error(`PDF.co API error: ${errorData.message || response.statusText}`)
     }
 
-    return await textResponse.text()
-  } else {
-    throw new Error(data.message)
+    const data = await response.json()
+    console.log("PDF.co API response data:", data)
+
+    if (data.error === false) {
+      const resultFileUrl = data.url
+      console.log("Downloading result from:", resultFileUrl)
+
+      const textResponse = await fetch(resultFileUrl)
+      if (!textResponse.ok) {
+        throw new Error(`Failed to download result: ${textResponse.statusText}`)
+      }
+
+      const extractedText = await textResponse.text()
+      console.log("Extracted text length:", extractedText.length)
+      return extractedText
+    } else {
+      throw new Error(data.message)
+    }
+  } catch (error) {
+    console.error("Error in extractTextFromPdf:", error)
+    throw error
   }
 }
 
-
 function processExtractedText(text: string): ExtractedCVData {
-  const extractedData: ExtractedCVData = {
+  // Implement your text processing logic here
+  // This is a simple example, you should enhance this based on your needs
+  const lines = text.split("\n")
+  const result: ExtractedCVData = {
     education: [],
     qualifications: [],
     projects: [],
@@ -64,101 +86,23 @@ function processExtractedText(text: string): ExtractedCVData {
     rawText: text,
   }
 
-  const lines = text.split(/\r?\n/).filter((line) => line.trim().length > 0)
-
   let currentSection = ""
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim()
-    const lowerLine = line.toLowerCase()
-
-    if (
-      lowerLine.includes("education") ||
-      lowerLine.includes("academic") ||
-      lowerLine.includes("degree") ||
-      lowerLine.includes("university") ||
-      lowerLine.includes("college") ||
-      lowerLine.includes("school")
-    ) {
+  for (const line of lines) {
+    if (line.toLowerCase().includes("education")) {
       currentSection = "education"
-      continue
-    } else if (
-      lowerLine.includes("skills") ||
-      lowerLine.includes("qualifications") ||
-      lowerLine.includes("certifications") ||
-      lowerLine.includes("expertise") ||
-      lowerLine.includes("technologies") ||
-      lowerLine.includes("proficiencies")
-    ) {
+    } else if (line.toLowerCase().includes("skills") || line.toLowerCase().includes("qualifications")) {
       currentSection = "qualifications"
-      continue
-    } else if (
-      lowerLine.includes("projects") ||
-      lowerLine.includes("experience") ||
-      lowerLine.includes("work") ||
-      lowerLine.includes("employment") ||
-      lowerLine.includes("job") ||
-      lowerLine.includes("career")
-    ) {
+    } else if (line.toLowerCase().includes("projects") || line.toLowerCase().includes("experience")) {
       currentSection = "projects"
-      continue
-    } else if (
-      lowerLine.includes("personal") ||
-      lowerLine.includes("contact") ||
-      lowerLine.includes("info") ||
-      lowerLine.includes("about me") ||
-      lowerLine.includes("profile")
-    ) {
-      currentSection = "personalInfo"
-      continue
-    }
-
-    // Extract email addresses
-    const emailMatch = line.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/)
-    if (emailMatch && !extractedData.personalInfo.email) {
-      extractedData.personalInfo.email = emailMatch[0]
-    }
-
-    // Extract phone numbers
-    const phoneMatch = line.match(/(\+\d{1,3}[\s-]?)?\d{3}[\s-]?\d{3}[\s-]?\d{4}/)
-    if (phoneMatch && !extractedData.personalInfo.phone) {
-      extractedData.personalInfo.phone = phoneMatch[0]
-    }
-
-    // Extract LinkedIn URLs
-    if (lowerLine.includes("linkedin.com") && !extractedData.personalInfo.linkedin) {
-      extractedData.personalInfo.linkedin = line
-    }
-
-    // Extract other websites
-    if (
-      (lowerLine.includes("http://") || lowerLine.includes("https://")) &&
-      !lowerLine.includes("linkedin") &&
-      !extractedData.personalInfo.website
-    ) {
-      extractedData.personalInfo.website = line
-    }
-
-    if (currentSection === "education" && line.length > 5) {
-      extractedData.education.push(line)
-    } else if (currentSection === "qualifications" && line.length > 3) {
-      extractedData.qualifications.push(line)
-    } else if (currentSection === "projects" && line.length > 5) {
-      extractedData.projects.push(line)
+    } else if (currentSection === "education") {
+      result.education.push(line)
+    } else if (currentSection === "qualifications") {
+      result.qualifications.push(line)
+    } else if (currentSection === "projects") {
+      result.projects.push(line)
     }
   }
 
-  return extractedData
-}
-
-
-function createEmptyExtractedData(): ExtractedCVData {
-  return {
-    education: [],
-    qualifications: [],
-    projects: [],
-    personalInfo: {},
-    rawText: "",
-  }
+  return result
 }
 
