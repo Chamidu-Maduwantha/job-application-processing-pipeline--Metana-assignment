@@ -1,9 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { sendFollowUpEmail } from "@/lib/email-service"
-import { getFirestore } from "firebase-admin/firestore"
+import { sendFollowUpEmail, getScheduledEmails, removeScheduledEmail } from "@/lib/email-service"
 
 export async function GET(request: NextRequest) {
   try {
+    // Check for a secret key to secure the endpoint
     const authHeader = request.headers.get("authorization")
     if (!authHeader || authHeader !== `Bearer ${process.env.CRON_SECRET_KEY}`) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -11,48 +11,40 @@ export async function GET(request: NextRequest) {
 
     console.log("Processing scheduled emails...")
 
-    const now = new Date()
+    const scheduledEmails = getScheduledEmails()
 
-    const db = getFirestore()
-    const emailsSnapshot = await db
-      .collection("scheduledEmails")
-      .where("scheduledFor", "<=", now.toISOString())
-      .where("sent", "==", false)
-      .limit(50)
-      .get()
-
-    if (emailsSnapshot.empty) {
+    if (scheduledEmails.length === 0) {
       console.log("No emails to send at this time")
       return NextResponse.json({ message: "No emails to send" })
     }
 
+    // Process each email
     const results = []
-    for (const doc of emailsSnapshot.docs) {
-      const emailData = doc.data()
+    for (const emailData of scheduledEmails) {
       console.log(`Sending email to ${emailData.to}...`)
 
       try {
-        await sendFollowUpEmail({
-          to: emailData.to,
-          name: emailData.name,
-          cvUrl: emailData.cvUrl,
-          applicationId: emailData.applicationId,
-        })
+        // Send the email
+        const sent = await sendFollowUpEmail(emailData)
 
-        await doc.ref.update({
-          sent: true,
-          sentAt: new Date().toISOString(),
-        })
-
-        results.push({
-          id: doc.id,
-          status: "sent",
-          to: emailData.to,
-        })
+        if (sent) {
+          removeScheduledEmail(emailData.applicationId)
+          results.push({
+            id: emailData.applicationId,
+            status: "sent",
+            to: emailData.to,
+          })
+        } else {
+          results.push({
+            id: emailData.applicationId,
+            status: "failed",
+            to: emailData.to,
+          })
+        }
       } catch (error) {
         console.error(`Error sending email to ${emailData.to}:`, error)
         results.push({
-          id: doc.id,
+          id: emailData.applicationId,
           status: "error",
           to: emailData.to,
           error: error instanceof Error ? error.message : "Unknown error",

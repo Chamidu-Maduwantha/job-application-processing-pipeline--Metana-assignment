@@ -1,15 +1,5 @@
 import { Resend } from "resend"
-import { getFirestore } from "firebase-admin/firestore"
-import { initializeApp, getApps, cert } from "firebase-admin/app"
 
-// Initialize Firebase Admin if it hasn't been initialized yet
-if (!getApps().length) {
-  initializeApp({
-    credential: cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY || "{}")),
-  })
-}
-
-const db = getFirestore()
 const resend = new Resend(process.env.RESEND_API_KEY)
 
 interface EmailData {
@@ -19,25 +9,14 @@ interface EmailData {
   applicationId: string
 }
 
+// Simple in-memory storage for scheduled emails
+let scheduledEmails: EmailData[] = []
+
 export async function scheduleFollowUpEmail(emailData: EmailData): Promise<boolean> {
   try {
-    // Calculate the send time for tomorrow at 10:00 AM
-    const tomorrow = new Date()
-    tomorrow.setDate(tomorrow.getDate() + 1)
-    tomorrow.setHours(10, 0, 0, 0)
-
-    // Store the email data in Firestore
-    await db.collection("scheduledEmails").add({
-      to: emailData.to,
-      name: emailData.name,
-      cvUrl: emailData.cvUrl,
-      applicationId: emailData.applicationId,
-      scheduledFor: tomorrow.toISOString(),
-      sent: false,
-      createdAt: new Date().toISOString(),
-    })
-
-    console.log("Follow-up email scheduled for tomorrow")
+    // Store the email data in memory
+    scheduledEmails.push(emailData)
+    console.log("Follow-up email scheduled")
     return true
   } catch (error) {
     console.error("Error scheduling follow-up email:", error)
@@ -66,21 +45,20 @@ export async function sendFollowUpEmail(emailData: EmailData): Promise<boolean> 
     }
 
     console.log("Email sent successfully:", data)
-
-    // Update the email status in Firestore
-    const emailsRef = db.collection("scheduledEmails")
-    const query = emailsRef.where("to", "==", emailData.to).where("sent", "==", false)
-    const snapshot = await query.get()
-
-    if (!snapshot.empty) {
-      const doc = snapshot.docs[0]
-      await doc.ref.update({ sent: true, sentAt: new Date().toISOString() })
-    }
-
     return true
   } catch (error) {
     console.error("Error sending follow-up email:", error)
     return false
   }
+}
+
+// Function to get all scheduled emails
+export function getScheduledEmails(): EmailData[] {
+  return scheduledEmails
+}
+
+// Function to remove sent emails from the schedule
+export function removeScheduledEmail(applicationId: string): void {
+  scheduledEmails = scheduledEmails.filter((email) => email.applicationId !== applicationId)
 }
 
