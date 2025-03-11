@@ -574,7 +574,7 @@ export default function ApplicationForm() {
             </div>
             {!isProduction && (
               <p className="text-xs text-muted-foreground">
-                Testing mode is for development purposes. Switch to Production mode for final submissions.
+                Testing mode is for development purposes.
               </p>
             )}
           </CardContent>
