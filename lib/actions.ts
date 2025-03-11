@@ -12,7 +12,6 @@ import { saveToGoogleSheets } from "./google-sheets-service"
 import { sendWebhookNotification } from "./webhook-service"
 import { scheduleFollowUpEmail } from "./email-service"
 
-// Define the structure for extracted CV data
 export type ExtractedCVData = {
   education: string[]
   qualifications: string[]
@@ -27,7 +26,6 @@ export type ExtractedCVData = {
   rawText: string
 }
 
-// Update the submitApplication function to better handle the extracted data
 export async function submitApplication(formData: FormData): Promise<{ success: boolean; id: string; cvUrl: string }> {
   try {
     console.log("Starting application submission process")
@@ -53,8 +51,7 @@ export async function submitApplication(formData: FormData): Promise<{ success: 
     const cvUrl = await uploadFileToGCS(cvFile)
     console.log("CV uploaded to GCS:", cvUrl)
 
-    // Create a basic extracted data structure with the form information
-    // This ensures we always have valid data even if parsing fails
+
     const basicData = {
       education: ["Education details will be processed"],
       qualifications: ["Skills and qualifications will be processed"],
@@ -67,14 +64,12 @@ export async function submitApplication(formData: FormData): Promise<{ success: 
       rawText: `Application from ${name} (${email}, ${phone}). File: ${cvFile.name} (${cvFile.type}, ${(cvFile.size / 1024).toFixed(1)} KB)`,
     }
 
-    // Try to parse the extracted data from the client
     let extractedData = basicData
     if (extractedDataJson) {
       try {
         const parsedData = JSON.parse(extractedDataJson)
         console.log("Using client-side extracted data")
 
-        // Merge the parsed data with the basic data to ensure we have valid values
         extractedData = {
           education:
             Array.isArray(parsedData.education) && parsedData.education.length > 0
@@ -95,23 +90,19 @@ export async function submitApplication(formData: FormData): Promise<{ success: 
           rawText: parsedData.rawText || basicData.rawText,
         }
 
-        // Ensure the raw text is not too large
         if (extractedData.rawText && extractedData.rawText.length > 10000) {
           console.log(`Truncating raw text from ${extractedData.rawText.length} to 10000 characters`)
           extractedData.rawText = extractedData.rawText.substring(0, 10000) + "... (truncated)"
         }
       } catch (error) {
         console.error("Error parsing extracted data JSON:", error)
-        // Fall back to the basic data
       }
     } else {
       console.log("No client-side extracted data, using fallback")
     }
 
-    // Generate a unique ID for the application
     const id = Date.now().toString()
 
-    // Create application object
     const application = {
       id,
       name,
@@ -126,12 +117,10 @@ export async function submitApplication(formData: FormData): Promise<{ success: 
       extractedData,
     }
 
-    // Save the application to Firestore
     console.log("Saving application to Firestore...")
     await saveApplicationToFirestore(application)
     console.log("Application saved to Firestore")
 
-    // Save the application data and extracted CV information to Google Sheets
     console.log("Saving application data to Google Sheets...")
     await saveToGoogleSheets(
       {
@@ -159,7 +148,6 @@ export async function submitApplication(formData: FormData): Promise<{ success: 
       applicationId: id,
     })
 
-    // Revalidate any pages that display applications
     revalidatePath("/")
 
     console.log("Application submission process completed successfully")

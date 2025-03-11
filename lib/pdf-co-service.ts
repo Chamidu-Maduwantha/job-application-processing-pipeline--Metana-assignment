@@ -10,7 +10,6 @@ export async function extractCVDataWithPdfCo(fileUrl: string, apiKey: string): P
   } catch (error) {
     console.error("Error with PDF.co extraction, falling back to simple text extraction:", error)
 
-    // Fallback to simple text extraction
     const response = await fetch(fileUrl)
     const text = await response.text()
     return processExtractedText(text)
@@ -133,12 +132,10 @@ function processExtractedText(text: string): ExtractedCVData {
       }
     }
 
-    // Attempt to extract name (this is a simple heuristic and might need improvement)
     if (!result.personalInfo.name && line.split(" ").length >= 2 && !emailMatch && !phoneMatch && !urlMatch) {
       result.personalInfo.name = line
     }
 
-    // Add content to the appropriate section
     switch (currentSection) {
       case "education":
         result.education.push(line)

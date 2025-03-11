@@ -476,7 +476,7 @@ export default function ApplicationForm() {
                             <div className="bg-primary/10 p-3 rounded-full">
                               <Loader2 className="h-8 w-8 text-primary animate-spin" />
                             </div>
-                            <p className="mt-2 text-sm font-medium text-foreground">Extracting data from CV...</p>
+                            <p className="mt-2 text-sm font-medium text-foreground">Please wait while we process your CV....</p>
                           </>
                         ) : (
                           <>
@@ -488,7 +488,7 @@ export default function ApplicationForm() {
                               {(file.size / 1024 / 1024).toFixed(2)} MB
                             </p>
                             {extractedData && (
-                              <p className="text-xs text-green-500 mt-1">Data extracted successfully</p>
+                              <p className="text-xs text-green-500 mt-1">"Your CV has been processed successfully</p>
                             )}
                             <Button
                               type="button"

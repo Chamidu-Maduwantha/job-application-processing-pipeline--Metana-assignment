@@ -9,12 +9,10 @@ interface EmailData {
   applicationId: string
 }
 
-// Simple in-memory storage for scheduled emails
 let scheduledEmails: EmailData[] = []
 
 export async function scheduleFollowUpEmail(emailData: EmailData): Promise<boolean> {
   try {
-    // Store the email data in memory
     scheduledEmails.push(emailData)
     console.log("Follow-up email scheduled")
     return true
@@ -52,12 +50,10 @@ export async function sendFollowUpEmail(emailData: EmailData): Promise<boolean> 
   }
 }
 
-// Function to get all scheduled emails
 export function getScheduledEmails(): EmailData[] {
   return scheduledEmails
 }
 
-// Function to remove sent emails from the schedule
 export function removeScheduledEmail(applicationId: string): void {
   scheduledEmails = scheduledEmails.filter((email) => email.applicationId !== applicationId)
 }

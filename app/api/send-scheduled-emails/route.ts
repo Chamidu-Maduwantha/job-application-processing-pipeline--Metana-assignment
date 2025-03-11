@@ -3,7 +3,6 @@ import { sendFollowUpEmail, getScheduledEmails, removeScheduledEmail } from "@/l
 
 export async function GET(request: NextRequest) {
   try {
-    // Check for a secret key to secure the endpoint
     const authHeader = request.headers.get("authorization")
     if (!authHeader || authHeader !== `Bearer ${process.env.CRON_SECRET_KEY}`) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -18,7 +17,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ message: "No emails to send" })
     }
 
-    // Process each email
     const results = []
     for (const emailData of scheduledEmails) {
       console.log(`Sending email to ${emailData.to}...`)
