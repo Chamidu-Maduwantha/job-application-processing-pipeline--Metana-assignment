@@ -3,12 +3,6 @@ import { sendFollowUpEmail } from "@/lib/email-service"
 import { getFirestore } from "firebase-admin/firestore"
 import { initializeApp, getApps, cert } from "firebase-admin/app"
 
-// Initialize Firebase Admin if it hasn't been initialized yet
-if (!getApps().length) {
-  initializeApp({
-    credential: cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY || "{}")),
-  })
-}
 
 const db = getFirestore()
 
